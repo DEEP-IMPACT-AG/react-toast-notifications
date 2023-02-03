@@ -27,6 +27,8 @@ import type {
   Placement,
   Id,
 } from './types';
+import {useState} from "react";
+import {useCallback} from "react";
 
 // $FlowFixMe `createContext`
 const ToastContext = React.createContext();
@@ -74,108 +76,113 @@ type Context = {
   toasts: Array<Object>,
 };
 
-export class ToastProvider extends Component<Props, State> {
-  static defaultProps = {
-    autoDismiss: false,
-    autoDismissTimeout: 5000,
-    components: defaultComponents,
-    newestOnTop: false,
-    placement: 'top-right',
-    transitionDuration: 220,
-  };
+export function ToastProvider({
+                                autoDismiss: inheritedAutoDismiss = false,
+                                autoDismissTimeout = 5000,
+                                children,
+                                components = defaultComponents,
+                                placement = 'top-right',
+                                newestOnTop = false,
+                                portalTargetSelector,
+                                transitionDuration = 220
+                              } : Props
 
-  state = { toasts: [] };
+) {
+    const [state, setState] = useState({ toasts: [] });
 
-  // Internal Helpers
-  // ------------------------------
+    // Internal Helpers
+    // ------------------------------
+    const has = useCallback((id: string) => {
+      if (!state.toasts.length) {
+        return false;
+      }
 
-  has = (id: string) => {
-    if (!this.state.toasts.length) {
-      return false;
-    }
+      return Boolean(state.toasts.filter(t => t.id === id).length);
+    }, [state.toasts]);
+    const add = useCallback((content: Node, options?: Options = {}, cb: Callback = NOOP) => {
+      const id = options.id ? options.id : generateUEID();
+      const callback = () => cb(id);
 
-    return Boolean(this.state.toasts.filter(t => t.id === id).length);
-  };
-  onDismiss = (id: Id, cb: Callback = NOOP) => () => {
-    cb(id);
-    this.remove(id);
-  };
+      // bail if a toast exists with this ID
+      if (has(id)) {
+        return;
+      }
 
-  // Public API
-  // ------------------------------
+      // update the toast stack
 
-  add = (content: Node, options?: Options = {}, cb: Callback = NOOP) => {
-    const id = options.id ? options.id : generateUEID();
-    const callback = () => cb(id);
+      Promise.resolve()
+      .then(() => {
+        setState(state => {
+          const newToast = { content, id, ...options };
+          const toasts = newestOnTop ? [newToast, ...state.toasts] : [...state.toasts, newToast];
+          return { toasts };
+        });
+      })
+      .then(() => callback())
 
-    // bail if a toast exists with this ID
-    if (this.has(id)) {
-      return;
-    }
+      // consumer may want to do something with the generated ID (and not use the callback)
+      return id;
+    }, [has, state] );
 
-    // update the toast stack
-    this.setState(state => {
-      const newToast = { content, id, ...options };
-      const toasts = this.props.newestOnTop ? [newToast, ...state.toasts] : [...state.toasts, newToast];
+    const remove = useCallback((id: Id, cb: Callback = NOOP) => {
+      const callback = () => cb(id);
 
-      return { toasts };
-    }, callback);
+      // bail if NO toasts exists with this ID
+      if (!has(id)) {
+        return;
+      }
 
-    // consumer may want to do something with the generated ID (and not use the callback)
-    return id;
-  };
-  remove = (id: Id, cb: Callback = NOOP) => {
-    const callback = () => cb(id);
+      Promise.resolve()
+      .then(() => {
+        setState(state => {
+          const toasts = state.toasts.filter(t => t.id !== id);
+          return { toasts };
+      });
 
-    // bail if NO toasts exists with this ID
-    if (!this.has(id)) {
-      return;
-    }
+      })
+      .then(() => callback())
 
-    this.setState(state => {
-      const toasts = state.toasts.filter(t => t.id !== id);
-      return { toasts };
-    }, callback);
-  };
-  removeAll = () => {
-    if (!this.state.toasts.length) {
-      return;
-    }
 
-    this.state.toasts.forEach(t => this.remove(t.id));
-  };
-  update = (id: Id, options?: Options = {}, cb: Callback = NOOP) => {
-    const callback = () => cb(id);
+    }, [has, state]);
 
-    // bail if NO toasts exists with this ID
-    if (!this.has(id)) {
-      return;
-    }
+    const onDismissCB = useCallback((id: Id, cb: Callback = NOOP) => {
+      cb(id);
+      remove(id);
+    }, [remove]);
 
-    // update the toast stack
-    this.setState(state => {
-      const old = state.toasts;
-      const i = old.findIndex(t => t.id === id);
-      const updatedToast = { ...old[i], ...options };
-      const toasts = [...old.slice(0, i), updatedToast, ...old.slice(i + 1)];
+    const removeAll = useCallback( () => {
+      if (!state.toasts.length) {
+        return;
+      }
 
-      return { toasts };
-    }, callback);
-  };
+      state.toasts.forEach(t => remove(t.id));
+    }, [state.toasts, remove]);
 
-  render() {
-    const {
-      autoDismiss: inheritedAutoDismiss,
-      autoDismissTimeout,
-      children,
-      components,
-      placement,
-      portalTargetSelector,
-      transitionDuration,
-    } = this.props;
+    const update = useCallback( (id: Id, options?: Options = {}, cb: Callback = NOOP) => {
+      const callback = () => cb(id);
+
+      // bail if NO toasts exists with this ID
+      if (!has(id)) {
+        return;
+      }
+
+      // update the toast stack
+
+      Promise.resolve()
+      .then(() => {
+        setState(state => {
+          const old = state.toasts;
+          const i = old.findIndex(t => t.id === id);
+          const updatedToast = { ...old[i], ...options };
+          const toasts = [...old.slice(0, i), updatedToast, ...old.slice(i + 1)];
+          return { toasts };
+        });
+      })
+      .then(() => callback())
+    }, [has, state]);
+
     const { Toast, ToastContainer } = { ...defaultComponents, ...components };
-    const { add, remove, removeAll, update } = this;
-    const toasts = Object.freeze(this.state.toasts);
+    const toasts = Object.freeze(state.toasts);
 
     const hasToasts = Boolean(toasts.length);
     const portalTarget = canUseDOM
@@ -200,36 +207,44 @@ export class ToastProvider extends Component<Props, State> {
                     id,
                     onDismiss,
                     ...unknownConsumerProps
-                  }) => (
-                    <Transition
-                      appear
-                      key={id}
-                      mountOnEnter
-                      timeout={transitionDuration}
-                      unmountOnExit
-                    >
-                      {transitionState => (
-                        <ToastController
-                          appearance={appearance}
-                          autoDismiss={
-                            autoDismiss !== undefined
-                              ? autoDismiss
-                              : inheritedAutoDismiss
-                          }
-                          autoDismissTimeout={autoDismissTimeout}
-                          component={Toast}
+                  }) => {
+                        // In order to avoid the following warning:
+                        // Warning: findDOMNode is deprecated in StrictMode. findDOMNode was passed an instance of Transition which is inside StrictMode. Instead, add a ref directly to the element you want to reference.
+                        // https://stackoverflow.com/questions/60903335/warning-finddomnode-is-deprecated-in-strictmode-finddomnode-was-passed-an-inst
+                        const nodeRef = React.createRef();
+
+                      return <Transition
+                          appear
                           key={id}
-                          onDismiss={this.onDismiss(id, onDismiss)}
-                          placement={placement}
-                          transitionDuration={transitionDuration}
-                          transitionState={transitionState}
-                          {...unknownConsumerProps}
-                        >
-                          {content}
-                        </ToastController>
-                      )}
-                    </Transition>
-                  )
+                          mountOnEnter
+                          timeout={transitionDuration}
+                          unmountOnExit
+                          nodeRef={nodeRef}
+                      >
+                          {transitionState => (
+                              <ToastController
+                                  appearance={appearance}
+                                  autoDismiss={
+                                      autoDismiss !== undefined
+                                          ? autoDismiss
+                                          : inheritedAutoDismiss
+                                  }
+                                  autoDismissTimeout={autoDismissTimeout}
+                                  component={Toast}
+                                  key={id}
+                                  onDismiss={() => onDismissCB(id, onDismiss)}
+                                  placement={placement}
+                                  transitionDuration={transitionDuration}
+                                  transitionState={transitionState}
+                                  {...unknownConsumerProps}
+                              >
+                                  <div ref={nodeRef}>
+                                    {content}
+                                  </div>
+                              </ToastController>
+                          )}
+                      </Transition>
+                  }
                 )}
               </TransitionGroup>
             </ToastContainer>,
@@ -240,8 +255,8 @@ export class ToastProvider extends Component<Props, State> {
         )}
       </Provider>
     );
-  }
 }
+
 
 export const ToastConsumer = ({ children }: { children: Context => Node }) => (
   <Consumer>{context => children(context)}</Consumer>

@@ -1,7 +1,7 @@
 // @flow
 /** @jsx jsx */
 
-import { jsx } from '@emotion/core';
+import { jsx } from '@emotion/react';
 import React, { type Node } from 'react';
 import { TransitionGroup } from 'react-transition-group';
 

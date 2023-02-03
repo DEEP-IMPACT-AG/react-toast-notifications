@@ -1,7 +1,6 @@
 // @flow
 
 import React, { Children, Component, type ComponentType } from 'react';
-import { Transition } from 'react-transition-group';
 
 import { NOOP } from './utils';
 import type { ToastProps } from './ToastElement';
