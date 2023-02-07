@@ -1,5 +1,5 @@
 {
-  "name": "react-toast-notifications",
+  "name": "@ava-x/react-toast-notifications",
   "version": "2.5.1-nt",
   "description": "A configurable, composable, toast notification system for react.",
   "main": "dist/index.js",
@@ -7,6 +7,9 @@
   "license": "MIT",
   "author": "Joss Mackison (https://github.com/jossmac)",
   "homepage": "https://github.com/ava-x/react-toast-notifications.git",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/org-108055009"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/ava-x/react-toast-notifications.git"
