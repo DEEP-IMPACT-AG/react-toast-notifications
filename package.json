@@ -44,7 +44,8 @@
   },
   "dependencies": {
     "@emotion/react": "^11.10.5",
-    "react-transition-group": "^4.4.5"
+    "react-transition-group": "^4.4.5",
+    "react-use-event-hook": "^0.9.6"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",

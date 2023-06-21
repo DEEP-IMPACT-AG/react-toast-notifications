@@ -2,7 +2,7 @@
   "presets": ["env", "flow", "react"],
   "plugins": ["transform-class-properties", "transform-object-rest-spread"],
   "ignore": [
-    "examples/src/raw/*.js"
+    "examples/src/raw/*.js",
     "release"
   ]
 }

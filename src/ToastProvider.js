@@ -1,12 +1,11 @@
 // @flow
 
 import React, {
-  Component,
   // $FlowFixMe `useContext`
   useContext,
   type ComponentType,
   type Node,
-  type Ref,
+  useMemo,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Transition, TransitionGroup } from 'react-transition-group';
@@ -14,6 +13,7 @@ import { Transition, TransitionGroup } from 'react-transition-group';
 import { ToastController } from './ToastController';
 import { ToastContainer, type ToastContainerProps } from './ToastContainer';
 import { type ToastProps, DefaultToast } from './ToastElement';
+
 const defaultComponents = { Toast: DefaultToast, ToastContainer };
 
 import { generateUEID, NOOP } from './utils';
@@ -22,17 +22,17 @@ import type {
   UpdateFn,
   RemoveFn,
   Callback,
-  ToastsType,
   Options,
   Placement,
   Id,
 } from './types';
-import {useState} from "react";
-import {useCallback} from "react";
+import { useState } from 'react';
+import { useCallback } from 'react';
+import useEvent from 'react-use-event-hook';
 
 // $FlowFixMe `createContext`
-const ToastContext = React.createContext();
-const { Consumer, Provider } = ToastContext;
+const ToastContextValue = React.createContext();
+const ToastContextAction = React.createContext();
 
 const canUseDOM = !!(
   typeof window !== 'undefined' &&
@@ -67,7 +67,7 @@ type Props = {
   // Note that specifying this will override any defaults set on individual children Toasts.
   transitionDuration: number,
 };
-type State = { toasts: ToastsType };
+
 type Context = {
   add: AddFn,
   remove: RemoveFn,
@@ -84,33 +84,34 @@ export function ToastProvider({
                                 placement = 'top-right',
                                 newestOnTop = false,
                                 portalTargetSelector,
-                                transitionDuration = 220
-                              } : Props
-
+                                transitionDuration = 220,
+                              }: Props,
 ) {
-    const [state, setState] = useState({ toasts: [] });
+  const [state, setState] = useState({ toasts: [] });
 
-    // Internal Helpers
-    // ------------------------------
-    const has = useCallback((id: string) => {
-      if (!state.toasts.length) {
-        return false;
-      }
+  // Internal Helpers
+  // ------------------------------
 
-      return Boolean(state.toasts.filter(t => t.id === id).length);
-    }, [state.toasts]);
-    const add = useCallback((content: Node, options?: Options = {}, cb: Callback = NOOP) => {
-      const id = options.id ? options.id : generateUEID();
-      const callback = () => cb(id);
+  const has = useEvent((id: string) => {
+    if (!state.toasts.length) {
+      return false;
+    }
 
-      // bail if a toast exists with this ID
-      if (has(id)) {
-        return;
-      }
+    return Boolean(state.toasts.filter(t => t.id === id).length);
+  });
 
-      // update the toast stack
+  const add = useEvent((content: Node, options?: Options = {}, cb: Callback = NOOP) => {
+    const id = options.id ? options.id : generateUEID();
+    const callback = () => cb(id);
 
-      Promise.resolve()
+    // bail if a toast exists with this ID
+    if (has(id)) {
+      return;
+    }
+
+    // update the toast stack
+
+    Promise.resolve()
       .then(() => {
         setState(state => {
           const newToast = { content, id, ...options };
@@ -118,57 +119,56 @@ export function ToastProvider({
           return { toasts };
         });
       })
-      .then(() => callback())
+      .then(() => callback());
 
-      // consumer may want to do something with the generated ID (and not use the callback)
-      return id;
-    }, [has, state] );
+    // consumer may want to do something with the generated ID (and not use the callback)
+    return id;
+  });
 
-    const remove = useCallback((id: Id, cb: Callback = NOOP) => {
-      const callback = () => cb(id);
+  const remove = useEvent((id: Id, cb: Callback = NOOP) => {
+    const callback = () => cb(id);
 
-      // bail if NO toasts exists with this ID
-      if (!has(id)) {
-        return;
-      }
+    // bail if NO toasts exists with this ID
+    if (!has(id)) {
+      return;
+    }
 
-      Promise.resolve()
+    Promise.resolve()
       .then(() => {
         setState(state => {
           const toasts = state.toasts.filter(t => t.id !== id);
           return { toasts };
-      });
-
+        });
       })
-      .then(() => callback())
+      .then(() => callback());
 
 
-    }, [has, state]);
+  });
 
-    const onDismissCB = useCallback((id: Id, cb: Callback = NOOP) => {
-      cb(id);
-      remove(id);
-    }, [remove]);
+  const onDismissCB = useCallback((id: Id, cb: Callback = NOOP) => {
+    cb(id);
+    remove(id);
+  }, [remove]);
 
-    const removeAll = useCallback( () => {
-      if (!state.toasts.length) {
-        return;
-      }
+  const removeAll = useEvent(() => {
+    if (!state.toasts.length) {
+      return;
+    }
 
-      state.toasts.forEach(t => remove(t.id));
-    }, [state.toasts, remove]);
+    state.toasts.forEach(t => remove(t.id));
+  });
 
-    const update = useCallback( (id: Id, options?: Options = {}, cb: Callback = NOOP) => {
-      const callback = () => cb(id);
+  const update = useEvent((id: Id, options?: Options = {}, cb: Callback = NOOP) => {
+    const callback = () => cb(id);
 
-      // bail if NO toasts exists with this ID
-      if (!has(id)) {
-        return;
-      }
+    // bail if NO toasts exists with this ID
+    if (!has(id)) {
+      return;
+    }
 
-      // update the toast stack
+    // update the toast stack
 
-      Promise.resolve()
+    Promise.resolve()
       .then(() => {
         setState(state => {
           const old = state.toasts;
@@ -178,21 +178,27 @@ export function ToastProvider({
           return { toasts };
         });
       })
-      .then(() => callback())
-    }, [has, state]);
+      .then(() => callback());
+  });
 
-    const { Toast, ToastContainer } = { ...defaultComponents, ...components };
-    const toasts = Object.freeze(state.toasts);
+  const { Toast, ToastContainer } = { ...defaultComponents, ...components };
+  const toasts = Object.freeze(state.toasts);
 
-    const hasToasts = Boolean(toasts.length);
-    const portalTarget = canUseDOM
-      ? portalTargetSelector
-        ? document.querySelector(portalTargetSelector)
-        : document.body
-      : null; // appease flow
+  const hasToasts = Boolean(toasts.length);
+  const portalTarget = canUseDOM
+    ? portalTargetSelector
+      ? document.querySelector(portalTargetSelector)
+      : document.body
+    : null; // appease flow
 
-    return (
-      <Provider value={{ add, remove, removeAll, update, toasts }}>
+  const valueActions = useMemo(
+    () => ({ add, remove, removeAll, update }),
+    [add, remove, removeAll, update],
+  );
+
+  return (
+    <ToastContextAction.Provider value={valueActions}>
+      <ToastContextValue.Provider value={{ toasts }}>
         {children}
 
         {portalTarget ? (
@@ -201,65 +207,70 @@ export function ToastProvider({
               <TransitionGroup component={null}>
                 {toasts.map(
                   ({
-                    appearance,
-                    autoDismiss,
-                    content,
-                    id,
-                    onDismiss,
-                    ...unknownConsumerProps
-                  }) => {
-                        // In order to avoid the following warning:
-                        // Warning: findDOMNode is deprecated in StrictMode. findDOMNode was passed an instance of Transition which is inside StrictMode. Instead, add a ref directly to the element you want to reference.
-                        // https://stackoverflow.com/questions/60903335/warning-finddomnode-is-deprecated-in-strictmode-finddomnode-was-passed-an-inst
-                        const nodeRef = React.createRef();
+                     appearance,
+                     autoDismiss,
+                     content,
+                     id,
+                     onDismiss,
+                     ...unknownConsumerProps
+                   }) => {
+                    // In order to avoid the following warning:
+                    // Warning: findDOMNode is deprecated in StrictMode. findDOMNode was passed an instance of Transition which is inside StrictMode. Instead, add a ref directly to the element you want to reference.
+                    // https://stackoverflow.com/questions/60903335/warning-finddomnode-is-deprecated-in-strictmode-finddomnode-was-passed-an-inst
+                    const nodeRef = React.createRef();
 
-                      return <Transition
-                          appear
+                    return <Transition
+                      appear
+                      key={id}
+                      mountOnEnter
+                      timeout={transitionDuration}
+                      unmountOnExit
+                      nodeRef={nodeRef}
+                    >
+                      {transitionState => (
+                        <ToastController
+                          appearance={appearance}
+                          autoDismiss={
+                            autoDismiss !== undefined
+                              ? autoDismiss
+                              : inheritedAutoDismiss
+                          }
+                          autoDismissTimeout={autoDismissTimeout}
+                          component={Toast}
                           key={id}
-                          mountOnEnter
-                          timeout={transitionDuration}
-                          unmountOnExit
-                          nodeRef={nodeRef}
-                      >
-                          {transitionState => (
-                              <ToastController
-                                  appearance={appearance}
-                                  autoDismiss={
-                                      autoDismiss !== undefined
-                                          ? autoDismiss
-                                          : inheritedAutoDismiss
-                                  }
-                                  autoDismissTimeout={autoDismissTimeout}
-                                  component={Toast}
-                                  key={id}
-                                  onDismiss={() => onDismissCB(id, onDismiss)}
-                                  placement={placement}
-                                  transitionDuration={transitionDuration}
-                                  transitionState={transitionState}
-                                  {...unknownConsumerProps}
-                              >
-                                  <div ref={nodeRef}>
-                                    {content}
-                                  </div>
-                              </ToastController>
-                          )}
-                      </Transition>
-                  }
+                          onDismiss={() => onDismissCB(id, onDismiss)}
+                          placement={placement}
+                          transitionDuration={transitionDuration}
+                          transitionState={transitionState}
+                          {...unknownConsumerProps}
+                        >
+                          <div ref={nodeRef}>
+                            {content}
+                          </div>
+                        </ToastController>
+                      )}
+                    </Transition>;
+                  },
                 )}
               </TransitionGroup>
             </ToastContainer>,
-            portalTarget
+            portalTarget,
           )
         ) : (
           <ToastContainer placement={placement} hasToasts={hasToasts} /> // keep ReactDOM.hydrate happy
         )}
-      </Provider>
-    );
+      </ToastContextValue.Provider>
+    </ToastContextAction.Provider>
+  );
 }
 
 
 export const ToastConsumer = ({ children }: { children: Context => Node }) => (
-  <Consumer>{context => children(context)}</Consumer>
+  <ToastContextAction.Consumer>
+    <ToastContextValue.Consumer>
+      {context => children(context)}
+    </ToastContextValue.Consumer>
+  </ToastContextAction.Consumer>
 );
 
 export const withToastManager = (Comp: ComponentType<*>) =>
@@ -271,11 +282,11 @@ export const withToastManager = (Comp: ComponentType<*>) =>
   ));
 
 export const useToasts = () => {
-  const ctx = useContext(ToastContext);
+  const ctx = useContext(ToastContextAction);
 
   if (!ctx) {
     throw Error(
-      'The `useToasts` hook must be called from a descendent of the `ToastProvider`.'
+      'The `useToasts` hook must be called from a descendent of the `ToastProvider`.',
     );
   }
 
@@ -284,6 +295,19 @@ export const useToasts = () => {
     removeToast: ctx.remove,
     removeAllToasts: ctx.removeAll,
     updateToast: ctx.update,
+  };
+};
+
+export const useToastsValue = () => {
+  const ctx = useContext(ToastContextValue);
+
+  if (!ctx) {
+    throw Error(
+      'The `useToastsValue` hook must be called from a descendent of the `ToastProvider`.',
+    );
+  }
+
+  return {
     toastStack: ctx.toasts,
   };
 };

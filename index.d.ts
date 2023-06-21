@@ -84,10 +84,14 @@ export function useToasts(): {
     addToast: AddToast;
     removeToast: RemoveToast;
     removeAllToasts: RemoveAllToasts;
+    updateToast: UpdateToast;
+};
+
+export function useToastsValue(): {
     toastStack: Array<{
         content: ReactNode;
         id: string;
         appearance: AppearanceTypes;
     }>;
-    updateToast: UpdateToast;
 };
+
