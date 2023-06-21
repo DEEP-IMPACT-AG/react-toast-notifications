@@ -1,8 +1,10 @@
-# 🚨 Not Maintained
+There is no surprise, this is a toast notification library. The original project (https://jossmac.github.io/react-toast-notifications) is abandoned,
+but we used that all the time, and did not want to replace it yet.
+ So I forked it and started to do some maintenance work on it, like
+- I made it work with React 18
+- I rewrote the context provider class, so it is a function component now
 
-This was a great project to learn from and fulfilled the requirements it set out to. Unfortunately, I can no-longer give this project the time it needs. Consider [react-hot-toast](https://github.com/timolins/react-hot-toast) as an alternative, or look at the source and make your own 🎉 (there really isn't much to it).
-
-[![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
+I am happy to accept pull requests, but this project is not in my main focus, so be patient. 
 
 ---
 
